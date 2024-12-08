@@ -1,0 +1,146 @@
+import praw
+
+
+reddit = praw.Reddit(
+    client_id='NpxLD7eaD9rISp5Z11q3jQ',
+    client_secret='dH8HeOK8KI7k6gVwTJNhK7lvV-abAg',
+    user_agent='StockTracker/1.0(by /u/Dull_Statistician172)'
+)
+
+# Test your connection
+print(reddit.read_only)  # Should return True if credentials are correct
+
+print("Client ID:", reddit.config.client_id)
+print("Client Secret:", reddit.config.client_secret)
+print("User Agent:", reddit.config.user_agent)
+
+# Test authentication
+try:
+    subreddit = reddit.subreddit("learnpython")
+    print(f"Subreddit name: {subreddit.display_name}")
+except Exception as e:
+    print(f"Error during subreddit fetch: {e}")
+
+
+
+subreddit = reddit.subreddit("stocks")  # Target subreddit
+query = "AAPL"  # Stock ticker symbol
+for post in subreddit.search(query, sort="hot", limit=50):  
+    print(f"Title: {post.title}")
+    print(f"Selftext: {post.selftext}")
+    print(f"Score: {post.score}\n")
+
+
+
+import pandas as pd
+
+data = []
+for post in subreddit.search(query, limit=50):
+    data.append({"title": post.title, "selftext": post.selftext, "score": post.score})
+
+df = pd.DataFrame(data)
+df.to_csv("reddit_stocks.csv", index=False)
+print(df.head())
+
+
+
+import re
+
+def clean_text_preserve_symbols(text):
+    # Remove special characters except $ (for stock symbols like $AAPL)
+    text = re.sub(r'[^\w\s$]', '', text)
+    return text.strip()
+
+# Apply the updated cleaning function
+df['cleaned_selftext'] = df['selftext'].apply(clean_text_preserve_symbols)
+df['cleaned_title'] = df['title'].apply(clean_text_preserve_symbols)
+
+
+
+keywords = ["price", "target", "bullish", "bearish"]
+df = df[df["cleaned_title"].str.contains("|".join(keywords), case=False) |
+        df["cleaned_selftext"].str.contains("|".join(keywords), case=False)]
+
+
+df = df[df["score"] >= 10]
+print(df.head())
+
+
+
+
+from textblob import TextBlob
+
+df["sentiment"] = df["cleaned_selftext"].apply(lambda x: TextBlob(x).sentiment.polarity)
+print(df[["cleaned_title", "sentiment"]].head())
+
+# Count mentions of stock symbols
+stock_mentions = df["cleaned_title"].str.findall(r"\b[A-Z]{1,5}\b").explode().value_counts()
+print(stock_mentions)
+
+
+# Inspect the cleaned columns for stock-like text
+print(df['cleaned_selftext'].head())
+print(df['cleaned_title'].head())
+
+
+# Display a few rows to inspect the cleaned data
+print(df[['cleaned_selftext', 'cleaned_title']].head())
+
+# Updated regex to match symbols with or without the $ prefix
+regex_pattern = r'\b\$?([A-Z]{1,5})\b'
+
+
+# Extract mentions
+selftext_mentions = df['cleaned_selftext'].str.extractall(regex_pattern)[0]
+title_mentions = df['cleaned_title'].str.extractall(regex_pattern)[0]
+
+
+valid_tickers = ["AAPL", "MSFT", "GOOG", "META", "INTC", "QCOM", "PE", "AI", "VR"]
+
+# Corrected regex pattern with a capture group
+regex_pattern = r'(\b[A-Z]{1,5}\b)'  # Added parentheses to create a capture group
+
+# Extract and validate stock mentions
+selftext_mentions = df['cleaned_selftext'].str.extractall(regex_pattern)[0]
+title_mentions = df['cleaned_title'].str.extractall(regex_pattern)[0]
+
+# Combine and validate against the stock ticker list
+all_mentions = pd.concat([selftext_mentions, title_mentions])
+filtered_mentions = all_mentions[all_mentions.isin(valid_tickers)]
+
+# Count occurrences of valid stock mentions
+stock_counts = filtered_mentions.value_counts()
+
+# Display results
+print("Filtered Stock Mentions:")
+print(stock_counts)
+
+
+# Plot the top 10 valid stock mentions
+if not stock_counts.empty:
+    top_stocks = stock_counts.head(10)
+    top_stocks.plot(kind="bar")
+    plt.title("Top 10 Mentioned Stocks (Filtered)")
+    plt.xlabel("Stock Symbol")
+    plt.ylabel("Count")
+    plt.show()
+else:
+    print("No valid stock mentions found.")
+
+
+from sklearn.datasets import load_iris
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
+
+# Load dataset
+data = load_iris()
+X = data.data  # Features
+y = data.target  # Labels
+
+# Define your model
+model = LogisticRegression(max_iter=200)
+
+# Perform cross-validation
+scores = cross_val_score(model, X, y, cv=2)  # Use 2 splits
+print("Cross-validation Scores:", scores)
+print("Mean Accuracy:", scores.mean())
