@@ -1,4 +1,5 @@
-# Stock-Analysis
+# Stock-Sentiment from Reddit
+
 README.md
 
 Project :- 
